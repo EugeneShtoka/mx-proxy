@@ -1,0 +1,8 @@
+mx-proxy
+
+.doc/
+.claude/
+
+*.swp
+*.swo
+Session.vim
