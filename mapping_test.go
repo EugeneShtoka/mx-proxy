@@ -113,6 +113,52 @@ func TestApplyMapping_invalidJSON(t *testing.T) {
 	}
 }
 
+func TestExtractString_jsonEncodedString(t *testing.T) {
+	data := map[string]any{
+		"output": `{"body":"hello","dest":"homeserver"}`,
+	}
+	got, ok := ExtractString(data, "output.body")
+	if !ok || got != "hello" {
+		t.Errorf("got (%q, %v), want (\"hello\", true)", got, ok)
+	}
+}
+
+func TestExtractString_jsonEncodedStringMissingKey(t *testing.T) {
+	data := map[string]any{
+		"output": `{"body":"hello"}`,
+	}
+	_, ok := ExtractString(data, "output.missing")
+	if ok {
+		t.Error("expected ok=false for missing key inside JSON-encoded string")
+	}
+}
+
+func TestExtractString_nonJsonString(t *testing.T) {
+	data := map[string]any{
+		"output": "not json",
+	}
+	_, ok := ExtractString(data, "output.body")
+	if ok {
+		t.Error("expected ok=false when string value is not JSON")
+	}
+}
+
+func TestApplyMapping_jsonEncodedOutput(t *testing.T) {
+	raw := []byte(`{"status":"ok","output":"{\"body\":\"hi\",\"destination\":\"homeserver\",\"room_id\":\"!abc:matrix.org\"}"}`)
+	mapping := map[string]string{
+		"body":        "output.body",
+		"destination": "output.destination",
+		"room_id":     "output.room_id",
+	}
+	msg, err := ApplyMapping(raw, mapping)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if msg.Body != "hi" || msg.Destination != "homeserver" || msg.RoomID != "!abc:matrix.org" {
+		t.Errorf("unexpected result: %+v", msg)
+	}
+}
+
 func TestApplyMapping_nestedPaths(t *testing.T) {
 	raw := []byte(`{"meta":{"dest":"homeserver"},"payload":{"text":"hi"},"room":"!x:y"}`)
 	mapping := map[string]string{

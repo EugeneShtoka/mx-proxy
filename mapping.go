@@ -35,6 +35,13 @@ func extractAny(data map[string]any, path string) (any, bool) {
 	}
 	nested, ok := val.(map[string]any)
 	if !ok {
+		// If the value is a JSON-encoded string, parse it transparently and continue.
+		if s, ok := val.(string); ok {
+			var parsed map[string]any
+			if json.Unmarshal([]byte(s), &parsed) == nil {
+				return extractAny(parsed, parts[1])
+			}
+		}
 		return nil, false
 	}
 	return extractAny(nested, parts[1])
