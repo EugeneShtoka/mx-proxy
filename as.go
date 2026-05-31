@@ -58,63 +58,19 @@ func (h *asHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			remaining = append(remaining, rawEvent)
 			continue
 		}
-
-		if event["type"] != "m.room.message" {
+		data, ok := extractASMessageData(event)
+		if !ok {
 			remaining = append(remaining, rawEvent)
 			continue
 		}
-
-		content, _ := event["content"].(map[string]any)
-
-		if isForwardedByProxy(content) {
-			remaining = append(remaining, rawEvent)
-			continue
-		}
-
-		msgtype, _ := content["msgtype"].(string)
-		if !isTextMsgtype(msgtype) {
-			remaining = append(remaining, rawEvent)
-			continue
-		}
-
-		if isEditEvent(content) {
-			remaining = append(remaining, rawEvent)
-			continue
-		}
-
-		msgBody, _ := content["body"].(string)
-		if strings.TrimSpace(msgBody) == "" {
-			remaining = append(remaining, rawEvent)
-			continue
-		}
-
-		roomID, _ := event["room_id"].(string)
-		sender, _ := event["sender"].(string)
-		eventID, _ := event["event_id"].(string)
-		var ts int64
-		if tsFloat, ok := event["origin_server_ts"].(float64); ok {
-			ts = int64(tsFloat)
-		}
-
-		data := TemplateData{
-			EventID: eventID,
-			RoomID:  roomID,
-			Sender:  sender,
-			Body:    msgBody,
-			MsgType: msgtype,
-			TS:      ts,
-		}
-
-		log.Printf("as: intercepting message from %s in %s (bridge: %s)", sender, roomID, bridge.Name)
-
+		log.Printf("as: intercepting message from %s in %s (bridge: %s)", data.Sender, data.RoomID, bridge.Name)
 		mapped, err := h.processor.Process(data)
 		if err != nil {
 			log.Printf("as: processor error: %v — passing event to bridge", err)
 			remaining = append(remaining, rawEvent)
 			continue
 		}
-		mapped.OriginalContent = content
-
+		mapped.OriginalContent, _ = event["content"].(map[string]any)
 		if _, err := h.router.Route(mapped); err != nil {
 			log.Printf("as: route error: %v", err)
 		}
@@ -122,4 +78,36 @@ func (h *asHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	modifiedTxn, _ := json.Marshal(map[string]any{"events": remaining})
 	forward(w, r, bridge.URL, modifiedTxn)
+}
+
+// extractASMessageData checks whether a raw Matrix event is an interceptable
+// message and extracts the fields needed for template rendering. Returns
+// (data, false) for any event that should be left for the bridge unchanged.
+func extractASMessageData(event map[string]any) (TemplateData, bool) {
+	if event["type"] != "m.room.message" {
+		return TemplateData{}, false
+	}
+	content, _ := event["content"].(map[string]any)
+	if isForwardedByProxy(content) {
+		return TemplateData{}, false
+	}
+	msgtype, _ := content["msgtype"].(string)
+	if !isTextMsgtype(msgtype) {
+		return TemplateData{}, false
+	}
+	if isEditEvent(content) {
+		return TemplateData{}, false
+	}
+	msgBody, _ := content["body"].(string)
+	if strings.TrimSpace(msgBody) == "" {
+		return TemplateData{}, false
+	}
+	var ts int64
+	if tsFloat, ok := event["origin_server_ts"].(float64); ok {
+		ts = int64(tsFloat)
+	}
+	roomID, _ := event["room_id"].(string)
+	sender, _ := event["sender"].(string)
+	eventID, _ := event["event_id"].(string)
+	return TemplateData{EventID: eventID, RoomID: roomID, Sender: sender, Body: msgBody, MsgType: msgtype, TS: ts}, true
 }

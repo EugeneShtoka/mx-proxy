@@ -48,42 +48,15 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if isForwardedByProxy(content) {
-		forward(w, r, h.upstream, body)
-		return
-	}
-
-	msgtype, _ := content["msgtype"].(string)
-	if !isTextMsgtype(msgtype) {
-		forward(w, r, h.upstream, body)
-		return
-	}
-
-	if isEditEvent(content) {
-		forward(w, r, h.upstream, body)
-		return
-	}
-
-	msgBody, _ := content["body"].(string)
-	if strings.TrimSpace(msgBody) == "" {
-		forward(w, r, h.upstream, body)
-		return
-	}
-
 	sender := r.URL.Query().Get("user_id")
+	data, ok := extractCSMessageData(content, roomID, sender)
+	if !ok {
+		forward(w, r, h.upstream, body)
+		return
+	}
+
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	h.router.CacheToken(sender, token)
-
-	replyFallback, actualBody := splitReplyFallback(msgBody)
-
-	data := TemplateData{
-		RoomID:        roomID,
-		Sender:        sender,
-		Body:          actualBody,
-		MsgType:       msgtype,
-		ReplyFallback: replyFallback,
-	}
-
 	log.Printf("cs: intercepting message from %s in %s", sender, roomID)
 
 	mapped, err := h.processor.Process(data)
@@ -107,6 +80,28 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	json.NewEncoder(w).Encode(map[string]string{"event_id": eventID})
+}
+
+// extractCSMessageData checks whether a client-server send event is interceptable
+// and extracts template fields. Returns (data, false) for events that should be
+// forwarded to the homeserver unchanged.
+func extractCSMessageData(content map[string]any, roomID, sender string) (TemplateData, bool) {
+	if isForwardedByProxy(content) {
+		return TemplateData{}, false
+	}
+	msgtype, _ := content["msgtype"].(string)
+	if !isTextMsgtype(msgtype) {
+		return TemplateData{}, false
+	}
+	if isEditEvent(content) {
+		return TemplateData{}, false
+	}
+	msgBody, _ := content["body"].(string)
+	if strings.TrimSpace(msgBody) == "" {
+		return TemplateData{}, false
+	}
+	replyFallback, actualBody := splitReplyFallback(msgBody)
+	return TemplateData{RoomID: roomID, Sender: sender, Body: actualBody, MsgType: msgtype, ReplyFallback: replyFallback}, true
 }
 
 func isTextMsgtype(msgtype string) bool {
