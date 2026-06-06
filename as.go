@@ -70,9 +70,18 @@ func (h *asHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			remaining = append(remaining, rawEvent)
 			continue
 		}
-		mapped.OriginalContent, _ = event["content"].(map[string]any)
-		if _, err := h.router.Route(mapped); err != nil {
-			log.Printf("as: route error: %v", err)
+
+		switch mapped.Status {
+		case "ok":
+			mapped.OriginalContent, _ = event["content"].(map[string]any)
+			if _, err := h.router.Route(mapped); err != nil {
+				log.Printf("as: route error: %v", err)
+			}
+		case "drop":
+			log.Printf("as: dropping event %s from %s", data.EventID, data.Sender)
+			// consumed, not added to remaining
+		default: // "passthrough" or unknown
+			remaining = append(remaining, rawEvent)
 		}
 	}
 

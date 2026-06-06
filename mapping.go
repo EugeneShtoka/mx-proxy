@@ -48,14 +48,16 @@ func extractAny(data map[string]any, path string) (any, bool) {
 }
 
 type MappedMessage struct {
+	Status          string
 	Body            string
-	ReplyFallback   string         // "> quote" prefix to prepend when reconstructing a reply body
-	Destination     string
+	ReplyFallback   string
 	RoomID          string
 	Sender          string
-	OriginalContent map[string]any // original event content, preserved on re-injection
+	OriginalContent map[string]any
 }
 
+// ApplyMapping extracts message fields from raw JSON using the configured dot-path
+// mapping. Called only for status="ok" responses; body must be non-empty.
 func ApplyMapping(raw []byte, mapping map[string]string) (MappedMessage, error) {
 	var data map[string]any
 	if err := json.Unmarshal(raw, &data); err != nil {
@@ -69,7 +71,6 @@ func ApplyMapping(raw []byte, mapping map[string]string) (MappedMessage, error) 
 	}{
 		{"body", &msg.Body},
 		{"reply_fallback", &msg.ReplyFallback},
-		{"destination", &msg.Destination},
 		{"room_id", &msg.RoomID},
 		{"sender", &msg.Sender},
 	} {
@@ -80,9 +81,6 @@ func ApplyMapping(raw []byte, mapping map[string]string) (MappedMessage, error) 
 
 	if msg.Body == "" {
 		return MappedMessage{}, fmt.Errorf("missing body in processor message")
-	}
-	if msg.Destination == "" {
-		return MappedMessage{}, fmt.Errorf("missing destination in processor message")
 	}
 
 	return msg, nil

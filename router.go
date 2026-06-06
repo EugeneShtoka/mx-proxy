@@ -8,7 +8,6 @@ import (
 	"log"
 	"net/http"
 	"net/url"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -41,20 +40,9 @@ func (r *Router) CacheToken(sender, token string) {
 	}
 }
 
-// Route delivers msg to its destination and returns the new Matrix event_id
-// (non-empty only for homeserver destinations).
+// Route delivers msg to the homeserver and returns the new Matrix event_id.
 func (r *Router) Route(msg MappedMessage) (string, error) {
-	switch {
-	case msg.Destination == "homeserver":
-		return r.routeToHomeserver(msg)
-	case strings.HasPrefix(msg.Destination, "bridge:"):
-		name := strings.TrimPrefix(msg.Destination, "bridge:")
-		eventID, err := r.routeToBridge(name, msg)
-		return eventID, err
-	default:
-		log.Printf("router: unknown destination %q — dropping", msg.Destination)
-		return "", nil
-	}
+	return r.routeToHomeserver(msg)
 }
 
 func (r *Router) routeToHomeserver(msg MappedMessage) (string, error) {

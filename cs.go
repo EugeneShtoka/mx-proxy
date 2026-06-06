@@ -2,6 +2,7 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -65,21 +66,32 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		forward(w, r, h.upstream, body)
 		return
 	}
-	if mapped.ReplyFallback != "" {
-		mapped.Body = mapped.ReplyFallback + "\n\n" + mapped.Body
-	}
-	mapped.OriginalContent = content
 
-	eventID, err := h.router.Route(mapped)
-	if err != nil {
-		log.Printf("cs: route error: %v", err)
-		http.Error(w, "routing error", http.StatusInternalServerError)
-		return
-	}
+	switch mapped.Status {
+	case "ok":
+		if mapped.ReplyFallback != "" {
+			mapped.Body = mapped.ReplyFallback + "\n\n" + mapped.Body
+		}
+		mapped.OriginalContent = content
+		eventID, err := h.router.Route(mapped)
+		if err != nil {
+			log.Printf("cs: route error: %v", err)
+			http.Error(w, "routing error", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"event_id": eventID})
 
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(http.StatusOK)
-	json.NewEncoder(w).Encode(map[string]string{"event_id": eventID})
+	case "drop":
+		log.Printf("cs: dropping message from %s in %s", sender, roomID)
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		json.NewEncoder(w).Encode(map[string]string{"event_id": fmt.Sprintf("$mx-proxy-dropped-%s", nextTxnID())})
+
+	default: // "passthrough" or unknown
+		forward(w, r, h.upstream, body)
+	}
 }
 
 // extractCSMessageData checks whether a client-server send event is interceptable

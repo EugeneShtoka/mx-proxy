@@ -1,18 +1,18 @@
 package main
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"fmt"
 	"log"
 	"sync"
-	"sync/atomic"
 	"time"
 )
 
-var reqCounter atomic.Int64
-
 func newReqID() string {
-	return fmt.Sprintf("%d", reqCounter.Add(1))
+	b := make([]byte, 16)
+	_, _ = rand.Read(b)
+	return fmt.Sprintf("mx-proxy-%x", b)
 }
 
 // connAdapter abstracts the wire differences between transport types.
@@ -23,14 +23,12 @@ type connAdapter interface {
 }
 
 type baseTransport struct {
-	name     string
-	endpoint string
-	dial     func(string) (connAdapter, error)
-
-	connMu  sync.Mutex
-	conn    connAdapter
-	writeMu sync.Mutex // serializes writes; reads are handled by the single readLoop goroutine
-
+	name      string
+	endpoint  string
+	dial      func(string) (connAdapter, error)
+	connMu    sync.Mutex
+	conn      connAdapter
+	writeMu   sync.Mutex
 	pendingMu sync.Mutex
 	pending   map[string]chan []byte
 }

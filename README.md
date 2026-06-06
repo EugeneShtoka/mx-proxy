@@ -9,7 +9,14 @@ mx-proxy sits in two places in the Matrix event flow:
 - **CS API** — bridges point their `homeserver_url` at mx-proxy instead of the real homeserver. When a bridge sends a text message, mx-proxy intercepts it and forwards it to the processor.
 - **AS API** — the homeserver's appservice transaction URLs point at mx-proxy instead of bridges directly. mx-proxy intercepts text messages from the homeserver before they reach the bridge.
 
-The processor has full ownership of intercepted messages. If it sends a message back, mx-proxy routes it to the specified destination (homeserver or a named bridge). If it sends nothing, the original message is dropped.
+The processor controls routing via a `status` field in its response:
+
+| `status` | CS direction | AS direction |
+|---|---|---|
+| `"ok"` | Route message to homeserver | Route message to homeserver |
+| `"drop"` | Return fake `event_id` to bridge; don't forward | Consume silently; don't deliver to bridge |
+| `"error"` | Log error, fall through to original forwarding | Log error, fall through |
+| *(absent)* | Fall through to original forwarding | Fall through to bridge |
 
 Only `m.text`, `m.notice`, and `m.emote` messages are intercepted. Edit events, non-text msgtypes, and all other event types pass through unchanged.
 
@@ -45,12 +52,15 @@ Configuration is a single TOML file. See [`.doc/configuration.md`](.doc/configur
 [processor]
   transport = "unix"
   endpoint  = "/var/run/mx-proxy/processor.sock"
-  send_template = '{"text": "{{.Body}}", "room": "{{.RoomID}}", "from": "{{.Sender}}"}'
+  # send_template fields: .Body .RoomID .Sender .EventID .MsgType
+  send_template = '{"workflow":"mx-message","params":{"text":{{.Body | json}},"room":{{.RoomID | json}},"sender":{{.Sender | json}},"event_id":"{{.EventID}}"}}'
 
+  # receive_mapping maps JSON keys in the processor response to MappedMessage fields.
+  # Dot-notation descends into nested objects.
   [processor.receive_mapping]
-    body        = "output"
-    destination = "target"
-    room_id     = "target_room"
+    body    = "text"
+    room_id = "room_id"
+    sender  = "sender"
 ```
 
 ### Processor transports

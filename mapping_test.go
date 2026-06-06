@@ -61,11 +61,11 @@ func TestExtractBool(t *testing.T) {
 }
 
 func TestApplyMapping_success(t *testing.T) {
-	raw := []byte(`{"output":"Hello","target":"bridge:whatsapp","target_room":"!abc:matrix.org"}`)
+	raw := []byte(`{"text":"Hello","room_id":"!abc:matrix.org","sender":"@user:server"}`)
 	mapping := map[string]string{
-		"body":        "output",
-		"destination": "target",
-		"room_id":     "target_room",
+		"body":    "text",
+		"room_id": "room_id",
+		"sender":  "sender",
 	}
 	msg, err := ApplyMapping(raw, mapping)
 	if err != nil {
@@ -74,19 +74,19 @@ func TestApplyMapping_success(t *testing.T) {
 	if msg.Body != "Hello" {
 		t.Errorf("body: got %q, want %q", msg.Body, "Hello")
 	}
-	if msg.Destination != "bridge:whatsapp" {
-		t.Errorf("destination: got %q, want %q", msg.Destination, "bridge:whatsapp")
-	}
 	if msg.RoomID != "!abc:matrix.org" {
 		t.Errorf("room_id: got %q, want %q", msg.RoomID, "!abc:matrix.org")
+	}
+	if msg.Sender != "@user:server" {
+		t.Errorf("sender: got %q, want %q", msg.Sender, "@user:server")
 	}
 }
 
 func TestApplyMapping_missingBody(t *testing.T) {
-	raw := []byte(`{"target":"homeserver","target_room":"!abc:matrix.org"}`)
+	raw := []byte(`{"room_id":"!abc:matrix.org"}`)
 	mapping := map[string]string{
-		"body":        "output",
-		"destination": "target",
+		"body":    "text",
+		"room_id": "room_id",
 	}
 	_, err := ApplyMapping(raw, mapping)
 	if err == nil {
@@ -94,20 +94,8 @@ func TestApplyMapping_missingBody(t *testing.T) {
 	}
 }
 
-func TestApplyMapping_missingDestination(t *testing.T) {
-	raw := []byte(`{"output":"hello"}`)
-	mapping := map[string]string{
-		"body":        "output",
-		"destination": "target",
-	}
-	_, err := ApplyMapping(raw, mapping)
-	if err == nil {
-		t.Error("expected error for missing destination")
-	}
-}
-
 func TestApplyMapping_invalidJSON(t *testing.T) {
-	_, err := ApplyMapping([]byte(`not json`), map[string]string{"body": "b", "destination": "d"})
+	_, err := ApplyMapping([]byte(`not json`), map[string]string{"body": "text"})
 	if err == nil {
 		t.Error("expected error for invalid JSON")
 	}
@@ -143,34 +131,18 @@ func TestExtractString_nonJsonString(t *testing.T) {
 	}
 }
 
-func TestApplyMapping_jsonEncodedOutput(t *testing.T) {
-	raw := []byte(`{"status":"ok","output":"{\"body\":\"hi\",\"destination\":\"homeserver\",\"room_id\":\"!abc:matrix.org\"}"}`)
-	mapping := map[string]string{
-		"body":        "output.body",
-		"destination": "output.destination",
-		"room_id":     "output.room_id",
-	}
-	msg, err := ApplyMapping(raw, mapping)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if msg.Body != "hi" || msg.Destination != "homeserver" || msg.RoomID != "!abc:matrix.org" {
-		t.Errorf("unexpected result: %+v", msg)
-	}
-}
-
 func TestApplyMapping_nestedPaths(t *testing.T) {
-	raw := []byte(`{"meta":{"dest":"homeserver"},"payload":{"text":"hi"},"room":"!x:y"}`)
+	raw := []byte(`{"meta":{"sender":"@user:s"},"payload":{"text":"hi"},"room":"!x:y"}`)
 	mapping := map[string]string{
-		"body":        "payload.text",
-		"destination": "meta.dest",
-		"room_id":     "room",
+		"body":    "payload.text",
+		"room_id": "room",
+		"sender":  "meta.sender",
 	}
 	msg, err := ApplyMapping(raw, mapping)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if msg.Body != "hi" || msg.Destination != "homeserver" || msg.RoomID != "!x:y" {
+	if msg.Body != "hi" || msg.RoomID != "!x:y" || msg.Sender != "@user:s" {
 		t.Errorf("unexpected result: %+v", msg)
 	}
 }
