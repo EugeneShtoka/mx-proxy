@@ -45,15 +45,16 @@ Configuration is a single TOML file. See [`.doc/configuration.md`](.doc/configur
   as = "127.0.0.1:8901"
 
 [[bridges]]
-  name     = "whatsapp"
-  url      = "http://127.0.0.1:29318"
-  hs_token = "secret_hs_token"
+  name        = "whatsapp"
+  url         = "http://127.0.0.1:29318"
+  hs_token    = "secret_hs_token"
+  user_prefix = "whatsapp_"   # optional: ghost-user MXID prefix for Bridge field in send_template
 
 [processor]
   transport = "unix"
   endpoint  = "/var/run/mx-proxy/processor.sock"
-  # send_template fields: .Body .RoomID .Sender .EventID .MsgType
-  send_template = '{"workflow":"mx-message","params":{"text":{{.Body | json}},"room":{{.RoomID | json}},"sender":{{.Sender | json}},"event_id":"{{.EventID}}"}}'
+  # send_template fields: .Body .RoomID .Sender .EventID .MsgType .TS .Bridge
+  send_template = '{"workflow":"mx-message","params":{"text":{{.Body | json}},"room":{{.RoomID | json}},"sender":{{.Sender | json}},"event_id":"{{.EventID}}","bridge":{{.Bridge | json}}}}'
 
   # receive_mapping maps JSON keys in the processor response to MappedMessage fields.
   # Dot-notation descends into nested objects.
