@@ -63,6 +63,7 @@ func (h *asHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			remaining = append(remaining, rawEvent)
 			continue
 		}
+		data.Bridge = bridge.Name
 		log.Printf("as: intercepting message from %s in %s (bridge: %s)", data.Sender, data.RoomID, bridge.Name)
 		mapped, err := h.processor.Process(data)
 		if err != nil {

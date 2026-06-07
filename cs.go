@@ -13,14 +13,16 @@ import (
 var csSendRE = regexp.MustCompile(`^/_matrix/client/[^/]+/rooms/([^/]+)/send/m\.room\.message/[^/]+$`)
 
 type csHandler struct {
-	upstream  string
+	cfg       *Config
 	processor *Processor
 	router    *Router
 }
 
-func newCSHandler(upstream string, processor *Processor, router *Router) *csHandler {
-	return &csHandler{upstream: upstream, processor: processor, router: router}
+func newCSHandler(cfg *Config, processor *Processor, router *Router) *csHandler {
+	return &csHandler{cfg: cfg, processor: processor, router: router}
 }
+
+func (h *csHandler) upstream() string { return h.cfg.Upstream.Homeserver }
 
 func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	body, err := io.ReadAll(r.Body)
@@ -31,7 +33,7 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	m := csSendRE.FindStringSubmatch(r.URL.Path)
 	if r.Method != http.MethodPut || m == nil {
-		forward(w, r, h.upstream, body)
+		forward(w, r, h.upstream(), body)
 		return
 	}
 	roomID := m[1]
@@ -45,15 +47,19 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	var content map[string]any
 	if err := json.Unmarshal(body, &content); err != nil {
-		forward(w, r, h.upstream, body)
+		forward(w, r, h.upstream(), body)
 		return
 	}
 
 	sender := r.URL.Query().Get("user_id")
 	data, ok := extractCSMessageData(content, roomID, sender)
 	if !ok {
-		forward(w, r, h.upstream, body)
+		forward(w, r, h.upstream(), body)
 		return
+	}
+
+	if b := h.cfg.bridgeByUserMXID(sender); b != nil {
+		data.Bridge = b.Name
 	}
 
 	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
@@ -63,7 +69,7 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	mapped, err := h.processor.Process(data)
 	if err != nil {
 		log.Printf("cs: processor error: %v — forwarding original", err)
-		forward(w, r, h.upstream, body)
+		forward(w, r, h.upstream(), body)
 		return
 	}
 
@@ -90,7 +96,7 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"event_id": fmt.Sprintf("$mx-proxy-dropped-%s", nextTxnID())})
 
 	default: // "passthrough" or unknown
-		forward(w, r, h.upstream, body)
+		forward(w, r, h.upstream(), body)
 	}
 }
 

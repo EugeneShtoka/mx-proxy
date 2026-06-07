@@ -38,7 +38,7 @@ func main() {
 	processor := NewProcessor(cfg.Processor, transport, tmpl)
 	csServer := &http.Server{
 		Addr:    cfg.Listen.CS,
-		Handler: newCSHandler(cfg.Upstream.Homeserver, processor, router),
+		Handler: newCSHandler(cfg, processor, router),
 	}
 	asServer := &http.Server{
 		Addr:    cfg.Listen.AS,

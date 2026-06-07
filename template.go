@@ -18,6 +18,7 @@ type TemplateData struct {
 	MsgType       string
 	TS            int64
 	ReplyFallback string // "> quote" prefix lines from a Matrix reply, empty for non-replies
+	Bridge        string // bridge name (e.g. "gmessages"), empty for direct CS sends
 }
 
 var templateFuncs = template.FuncMap{

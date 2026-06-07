@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/BurntSushi/toml"
 )
@@ -28,9 +29,10 @@ type ListenConfig struct {
 }
 
 type BridgeConfig struct {
-	Name    string `toml:"name"`
-	URL     string `toml:"url"`
-	HSToken string `toml:"hs_token"`
+	Name       string `toml:"name"`
+	URL        string `toml:"url"`
+	HSToken    string `toml:"hs_token"`
+	UserPrefix string `toml:"user_prefix"` // MXID localpart prefix for ghost users, e.g. "gmessages_"
 }
 
 type ProcessorConfig struct {
@@ -92,6 +94,24 @@ func (c *Config) bridgeByHSToken(token string) *BridgeConfig {
 func (c *Config) bridgeByName(name string) *BridgeConfig {
 	for i := range c.Bridges {
 		if c.Bridges[i].Name == name {
+			return &c.Bridges[i]
+		}
+	}
+	return nil
+}
+
+// bridgeByUserMXID finds the bridge whose user_prefix matches the localpart of
+// the given MXID (format "@localpart:domain"). Returns nil if no prefix matches
+// or if user_prefix is unconfigured for all bridges.
+func (c *Config) bridgeByUserMXID(mxid string) *BridgeConfig {
+	localpart := mxid
+	if i := strings.Index(mxid, ":"); i >= 0 {
+		localpart = mxid[1:i] // strip leading '@' and trailing ':domain'
+	} else if len(mxid) > 0 && mxid[0] == '@' {
+		localpart = mxid[1:]
+	}
+	for i := range c.Bridges {
+		if p := c.Bridges[i].UserPrefix; p != "" && strings.HasPrefix(localpart, p) {
 			return &c.Bridges[i]
 		}
 	}

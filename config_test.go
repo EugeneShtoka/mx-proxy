@@ -116,3 +116,60 @@ func TestBridgeByName(t *testing.T) {
 		t.Error("expected nil for unknown name")
 	}
 }
+
+func TestBridgeByUserMXID(t *testing.T) {
+	cfg := &Config{
+		Bridges: []BridgeConfig{
+			{Name: "gmessages", UserPrefix: "gmessages_"},
+			{Name: "whatsapp",  UserPrefix: "whatsapp_"},
+			{Name: "noprefix"},
+		},
+	}
+
+	tests := []struct {
+		mxid string
+		want string // bridge name, "" for no match
+	}{
+		{"@gmessages_1.207:matrix.cloud-surf.com", "gmessages"},
+		{"@whatsapp_15551234:matrix.cloud-surf.com", "whatsapp"},
+		{"@eugene:matrix.cloud-surf.com", ""},
+		{"@gmessages_:matrix.cloud-surf.com", "gmessages"}, // empty suffix still matches prefix
+		{"gmessages_noDomain", "gmessages"},                // no @ or : — localpart only
+		{"", ""},
+	}
+	for _, tc := range tests {
+		b := cfg.bridgeByUserMXID(tc.mxid)
+		got := ""
+		if b != nil {
+			got = b.Name
+		}
+		if got != tc.want {
+			t.Errorf("bridgeByUserMXID(%q) = %q, want %q", tc.mxid, got, tc.want)
+		}
+	}
+}
+
+func TestLoadConfig_userPrefix(t *testing.T) {
+	path := writeConfig(t, `
+[upstream]
+  homeserver = "http://127.0.0.1:8008"
+[listen]
+  cs = "127.0.0.1:8900"
+  as = "127.0.0.1:8901"
+[[bridges]]
+  name        = "gmessages"
+  url         = "http://127.0.0.1:29336"
+  hs_token    = "tok"
+  user_prefix = "gmessages_"
+[processor]
+  transport = "http"
+  endpoint  = "http://127.0.0.1:9100"
+`)
+	cfg, err := loadConfig(path)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if cfg.Bridges[0].UserPrefix != "gmessages_" {
+		t.Errorf("user_prefix: got %q", cfg.Bridges[0].UserPrefix)
+	}
+}

@@ -75,7 +75,7 @@ func TestCompileTemplate_invalid(t *testing.T) {
 }
 
 func TestRender_allFields(t *testing.T) {
-	src := `{{.EventID}} {{.Sender}} {{.MsgType}} {{.TS}}`
+	src := `{{.EventID}} {{.Sender}} {{.MsgType}} {{.TS}} {{.Bridge}}`
 	et, err := CompileTemplate(src)
 	if err != nil {
 		t.Fatal(err)
@@ -85,12 +85,13 @@ func TestRender_allFields(t *testing.T) {
 		Sender:  "@alice:server",
 		MsgType: "m.text",
 		TS:      1234567890,
+		Bridge:  "gmessages",
 	}
 	out, err := et.Render(data)
 	if err != nil {
 		t.Fatal(err)
 	}
-	want := "$evt:server @alice:server m.text 1234567890"
+	want := "$evt:server @alice:server m.text 1234567890 gmessages"
 	if string(out) != want {
 		t.Errorf("got %q, want %q", out, want)
 	}
