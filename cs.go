@@ -81,8 +81,8 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		mapped.OriginalContent = content
 		eventID, err := h.router.Route(mapped)
 		if err != nil {
-			log.Printf("cs: route error: %v", err)
-			http.Error(w, "routing error", http.StatusInternalServerError)
+			log.Printf("cs: route error: %v — falling back to original", err)
+			forward(w, r, h.upstream(), body)
 			return
 		}
 		w.Header().Set("Content-Type", "application/json")
