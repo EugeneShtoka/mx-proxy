@@ -104,9 +104,6 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 // and extracts template fields. Returns (data, false) for events that should be
 // forwarded to the homeserver unchanged.
 func extractCSMessageData(content map[string]any, roomID, sender string) (TemplateData, bool) {
-	if isForwardedByProxy(content) {
-		return TemplateData{}, false
-	}
 	msgtype, _ := content["msgtype"].(string)
 	if !isTextMsgtype(msgtype) {
 		return TemplateData{}, false
@@ -136,11 +133,6 @@ func isEditEvent(content map[string]any) bool {
 		return false
 	}
 	return relates["rel_type"] == "m.replace"
-}
-
-func isForwardedByProxy(content map[string]any) bool {
-	v, ok := content["io.mx-proxy.forwarded"].(bool)
-	return ok && v
 }
 
 // splitReplyFallback splits a Matrix reply body into the "> quote" prefix and

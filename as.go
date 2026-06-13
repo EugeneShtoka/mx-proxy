@@ -98,9 +98,6 @@ func extractASMessageData(event map[string]any) (TemplateData, bool) {
 		return TemplateData{}, false
 	}
 	content, _ := event["content"].(map[string]any)
-	if isForwardedByProxy(content) {
-		return TemplateData{}, false
-	}
 	msgtype, _ := content["msgtype"].(string)
 	if !isTextMsgtype(msgtype) {
 		return TemplateData{}, false

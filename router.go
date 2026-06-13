@@ -135,7 +135,6 @@ func mergeContent(original map[string]any, body string) map[string]any {
 		out[k] = v
 	}
 	out["body"] = body
-	out["io.mx-proxy.forwarded"] = true
 	return out
 }
 
