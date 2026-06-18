@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"regexp"
 	"strings"
+	"time"
 )
 
 var csSendRE = regexp.MustCompile(`^/_matrix/client/[^/]+/rooms/([^/]+)/send/m\.room\.message/[^/]+$`)
@@ -90,10 +91,17 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		json.NewEncoder(w).Encode(map[string]string{"event_id": eventID})
 
 	case "drop":
+		fakeEventID := fmt.Sprintf("$mx-proxy-dropped-%s", nextTxnID())
 		log.Printf("cs: dropping message from %s in %s", sender, roomID)
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		json.NewEncoder(w).Encode(map[string]string{"event_id": fmt.Sprintf("$mx-proxy-dropped-%s", nextTxnID())})
+		json.NewEncoder(w).Encode(map[string]string{"event_id": fakeEventID})
+		if bridge := h.cfg.bridgeByUserMXID(sender); bridge != nil {
+			go func(b *BridgeConfig, d TemplateData, eid string) {
+				time.Sleep(100 * time.Millisecond)
+				h.router.SynthesizeEcho(b, d, eid)
+			}(bridge, data, fakeEventID)
+		}
 
 	default: // "passthrough" or unknown
 		forward(w, r, h.upstream(), body)

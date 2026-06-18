@@ -87,6 +87,43 @@ func (r *Router) routeToHomeserver(msg MappedMessage) (string, error) {
 	return result.EventID, nil
 }
 
+// SynthesizeEcho delivers a synthetic AS transaction to the bridge with the
+// exact eventID that was returned in the CS drop response. This unblocks
+// bridges that wait for a homeserver echo before resuming their sync loop.
+func (r *Router) SynthesizeEcho(bridge *BridgeConfig, data TemplateData, eventID string) {
+	txn := nextTxnID()
+	u := fmt.Sprintf("%s/_matrix/app/v1/transactions/%s", bridge.URL, txn)
+
+	event := map[string]any{
+		"type":             "m.room.message",
+		"room_id":          data.RoomID,
+		"sender":           data.Sender,
+		"event_id":         eventID,
+		"origin_server_ts": time.Now().UnixMilli(),
+		"content": map[string]any{
+			"msgtype": data.MsgType,
+			"body":    data.Body,
+		},
+	}
+	body, _ := json.Marshal(map[string]any{"events": []any{event}})
+
+	req, err := http.NewRequest(http.MethodPut, u, bytes.NewReader(body))
+	if err != nil {
+		log.Printf("router: synthetic echo to %s: %v", bridge.Name, err)
+		return
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+bridge.HSToken)
+
+	resp, err := r.client.Do(req)
+	if err != nil {
+		log.Printf("router: synthetic echo to %s: %v", bridge.Name, err)
+		return
+	}
+	resp.Body.Close()
+	log.Printf("router: synthetic echo to bridge %s event_id %s (status %d)", bridge.Name, eventID, resp.StatusCode)
+}
+
 func (r *Router) routeToBridge(name string, msg MappedMessage) (string, error) {
 	bridge := r.cfg.bridgeByName(name)
 	if bridge == nil {
