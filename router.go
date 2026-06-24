@@ -175,6 +175,32 @@ func mergeContent(original map[string]any, body string) map[string]any {
 	return out
 }
 
+// WhoAmI resolves the Matrix user ID for the given Bearer token via the
+// homeserver's /whoami endpoint. Returns "" on any error.
+func (r *Router) WhoAmI(token string) string {
+	u := r.cfg.Upstream.Homeserver + "/_matrix/client/v3/account/whoami"
+	req, err := http.NewRequest(http.MethodGet, u, nil)
+	if err != nil {
+		log.Printf("whoami: build request: %v", err)
+		return ""
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	resp, err := r.client.Do(req)
+	if err != nil {
+		log.Printf("whoami: request: %v", err)
+		return ""
+	}
+	defer resp.Body.Close()
+	var result struct {
+		UserID string `json:"user_id"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		log.Printf("whoami: decode: %v", err)
+		return ""
+	}
+	return result.UserID
+}
+
 func (r *Router) setAuth(req *http.Request, sender string) {
 	if tok, ok := r.tokens.Load(sender); ok {
 		req.Header.Set("Authorization", "Bearer "+tok.(string))

@@ -53,6 +53,10 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	sender := r.URL.Query().Get("user_id")
+	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
+	if sender == "" {
+		sender = h.router.WhoAmI(token)
+	}
 	data, ok := extractCSMessageData(content, roomID, sender)
 	if !ok {
 		forward(w, r, h.upstream(), body)
@@ -63,7 +67,6 @@ func (h *csHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		data.Bridge = b.Name
 	}
 
-	token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 	h.router.CacheToken(sender, token)
 	log.Printf("cs: intercepting message from %s in %s", sender, roomID)
 
